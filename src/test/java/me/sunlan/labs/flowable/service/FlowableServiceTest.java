@@ -65,14 +65,14 @@ public class FlowableServiceTest {
         assertTrue(flowableService.isProcessEnded(processInstance.getProcessInstanceId()));
 
         // 根据流程发起人，获取历史流程列表
-        List<HistoricProcessInstance> historicProcessInstances = flowableService.findHistoricProcessInstanceByUserId(initiator);
+        List<HistoricProcessInstance> historicProcessInstances = flowableService.findHistoricProcessInstancesByUserId(initiator);
         boolean helloworldHistoricProcessExists = historicProcessInstances.stream().anyMatch(e -> helloworldProcessDefinitionKey.equals(e.getProcessDefinitionKey()));
         assertTrue(helloworldHistoricProcessExists);
 
         // 历史变量列表
-        List<HistoricVariableInstance> historicVariableInstances = flowableService.findHistoricVariableInstanceByProcessInstanceId(processInstance.getProcessInstanceId());
+        List<HistoricVariableInstance> historicVariableInstances = flowableService.findHistoricVariableInstancesByProcessInstanceId(processInstance.getProcessInstanceId());
         assertTrue(!historicVariableInstances.isEmpty());
-        assertEquals(initiator, flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "applyUserId").get().getValue());
-        assertEquals("world", flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "hello").get().getValue());
+        assertEquals(initiator, flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "applyUserId").getValue());
+        assertEquals("world", flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "hello").getValue());
     }
 }

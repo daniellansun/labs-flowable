@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 @Transactional
@@ -79,25 +78,16 @@ public class FlowableService {
         return taskService.getVariable(taskId, variableName);
     }
 
-    public List<HistoricProcessInstance> findHistoricProcessInstanceByUserId(String userId) {
+    public List<HistoricProcessInstance> findHistoricProcessInstancesByUserId(String userId) {
         return historyService.createHistoricProcessInstanceQuery().startedBy(userId).list();
     }
 
-    public List<HistoricVariableInstance> findHistoricVariableInstanceByProcessInstanceId(String processInstanceId) {
+    public List<HistoricVariableInstance> findHistoricVariableInstancesByProcessInstanceId(String processInstanceId) {
         return historyService.createHistoricVariableInstanceQuery().processInstanceId(processInstanceId).list();
     }
 
-    public Optional<HistoricVariableInstance> findHistoricVariableInstance(String processInstanceId, String variableName) {
-        List<HistoricVariableInstance> historicVariableInstances = historyService.createHistoricVariableInstanceQuery().processInstanceId(processInstanceId).variableName(variableName).list();
-        int size = historicVariableInstances.size();
-
-        if (0 == size) return Optional.empty();
-        if (size > 1) {
-            throw new IllegalStateException(size + " historic variable instances found(expecting just 1 instance found), " +
-                    "processInstanceId:" + processInstanceId + ", variableName:" + variableName);
-        }
-
-        return Optional.of(historicVariableInstances.get(0));
+    public HistoricVariableInstance findHistoricVariableInstance(String processInstanceId, String variableName) {
+        return historyService.createHistoricVariableInstanceQuery().processInstanceId(processInstanceId).variableName(variableName).singleResult();
     }
 
     public RepositoryService getRepositoryService() {
