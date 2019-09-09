@@ -4,6 +4,7 @@ import org.flowable.engine.RepositoryService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
+import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,5 +68,11 @@ public class FlowableServiceTest {
         List<HistoricProcessInstance> historicProcessInstances = flowableService.findHistoricProcessInstanceByUserId(initiator);
         boolean helloworldHistoricProcessExists = historicProcessInstances.stream().anyMatch(e -> helloworldProcessDefinitionKey.equals(e.getProcessDefinitionKey()));
         assertTrue(helloworldHistoricProcessExists);
+
+        // 历史变量列表
+        List<HistoricVariableInstance> historicVariableInstances = flowableService.findHistoricVariableInstanceByProcessInstanceId(processInstance.getProcessInstanceId());
+        assertTrue(!historicVariableInstances.isEmpty());
+        assertEquals(initiator, flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "applyUserId").get().getValue());
+        assertEquals("world", flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "hello").get().getValue());
     }
 }
