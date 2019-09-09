@@ -1,6 +1,7 @@
 package me.sunlan.labs.flowable.service;
 
 import org.flowable.engine.RepositoryService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.junit.Test;
@@ -26,15 +27,18 @@ public class FlowableServiceTest {
     public void testHelloWorld() {
         RepositoryService repositoryService = flowableService.getRepositoryService();
 //        Deployment deployment = repositoryService.createDeployment().addClasspathResource("processes/VacationRequest.bpmn20.xml").deploy();
-        long count = repositoryService.createProcessDefinitionQuery().processDefinitionKey("helloworldProcess").count();
+        final String helloworldProcessDefinitionKey = "helloworldProcess";
+        long count = repositoryService.createProcessDefinitionQuery().processDefinitionKey(helloworldProcessDefinitionKey).count();
         assertEquals(1, count);
 
         Map<String, Object> variables = new HashMap<>();
         variables.put("hello", "world");
 
+        final String initiator = "daniel";
+
         // 启动流程
         ProcessInstance processInstance =
-                flowableService.startProcessInstanceByKey("helloworldProcess", variables, "daniel");
+                flowableService.startProcessInstanceByKey(helloworldProcessDefinitionKey, variables, initiator);
 
         // 流程应未结束
         assertTrue(!flowableService.isProcessEnded(processInstance.getProcessInstanceId()));
@@ -50,7 +54,7 @@ public class FlowableServiceTest {
 
         // 获取变量
         assertEquals(2, flowableService.findVariablesByTaskId(helloworldTask.getId()).size());
-        assertEquals("daniel", flowableService.findVariable(helloworldTask.getId(), "applyUserId"));
+        assertEquals(initiator, flowableService.findVariable(helloworldTask.getId(), "applyUserId"));
         assertEquals("world", flowableService.findVariable(helloworldTask.getId(), "hello"));
 
         // 完成问好任务
@@ -58,5 +62,10 @@ public class FlowableServiceTest {
 
         // 流程应已结束
         assertTrue(flowableService.isProcessEnded(processInstance.getProcessInstanceId()));
+
+        // 根据流程发起人，获取历史流程列表
+        List<HistoricProcessInstance> historicProcessInstances = flowableService.findHistoricProcessInstanceByUserId(initiator);
+        boolean helloworldHistoricProcessExists = historicProcessInstances.stream().anyMatch(e -> helloworldProcessDefinitionKey.equals(e.getProcessDefinitionKey()));
+        assertTrue(helloworldHistoricProcessExists);
     }
 }

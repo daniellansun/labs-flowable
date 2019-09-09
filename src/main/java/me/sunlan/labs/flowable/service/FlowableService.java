@@ -2,6 +2,7 @@ package me.sunlan.labs.flowable.service;
 
 
 import org.flowable.engine.*;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,6 +75,10 @@ public class FlowableService {
 
     public Object findVariable(String taskId, String variableName) {
         return taskService.getVariable(taskId, variableName);
+    }
+
+    public List<HistoricProcessInstance> findHistoricProcessInstanceByUserId(String userId) {
+        return historyService.createHistoricProcessInstanceQuery().startedBy(userId).list();
     }
 
     public RepositoryService getRepositoryService() {
