@@ -5,6 +5,7 @@ import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.flowable.variable.api.history.HistoricVariableInstance;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,15 +24,25 @@ import static org.junit.Assert.assertTrue;
 public class FlowableServiceTest {
     @Autowired
     private FlowableService flowableService;
+    private String helloworldProcessDefinitionKey = "helloworldProcess";
+    private String bondProcessDefinitionKey = "bondProcess";
 
-    @Test
-    public void testHelloWorld() {
+    private static volatile boolean deployed = false;
+
+    @Before
+    public void setUp() {
+        if (deployed) return;
+
         RepositoryService repositoryService = flowableService.getRepositoryService();
 //        Deployment deployment = repositoryService.createDeployment().addClasspathResource("processes/VacationRequest.bpmn20.xml").deploy();
-        final String helloworldProcessDefinitionKey = "helloworldProcess";
-        long count = repositoryService.createProcessDefinitionQuery().processDefinitionKey(helloworldProcessDefinitionKey).count();
-        assertEquals(1, count);
+        assertEquals(1, repositoryService.createProcessDefinitionQuery().processDefinitionKey(helloworldProcessDefinitionKey).count());
+        assertEquals(1, repositoryService.createProcessDefinitionQuery().processDefinitionKey(bondProcessDefinitionKey).count());
 
+        deployed = true;
+    }
+
+    @Test
+    public void testHelloWorldProcess() {
         Map<String, Object> variables = new HashMap<>();
         variables.put("hello", "world");
 
@@ -54,7 +65,7 @@ public class FlowableServiceTest {
         assertEquals("helloworld", helloworldTask.getTaskDefinitionKey());
 
         // 获取变量
-        assertEquals(2, flowableService.findVariablesByTaskId(helloworldTask.getId()).size());
+        assertEquals(2, flowableService.findVariables(helloworldTask.getId()).size());
         assertEquals(initiator, flowableService.findVariable(helloworldTask.getId(), "applyUserId"));
         assertEquals("world", flowableService.findVariable(helloworldTask.getId(), "hello"));
 
@@ -74,5 +85,152 @@ public class FlowableServiceTest {
         assertTrue(!historicVariableInstances.isEmpty());
         assertEquals(initiator, flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "applyUserId").getValue());
         assertEquals("world", flowableService.findHistoricVariableInstance(processInstance.getProcessInstanceId(), "hello").getValue());
+    }
+
+    @Test
+    public void testBondProcess_allPass() {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("demo", "true");
+
+        final String initiator = "daniel.sun";
+
+        ProcessInstance processInstance =
+                flowableService.startProcessInstanceByKey(bondProcessDefinitionKey, variables, initiator);
+
+        // 获取中台审批任务
+        Task moAuditTask = flowableService.findTasks(tq -> tq.taskCandidateGroup("moUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task moAuditTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("moAudit", moAuditTask.getTaskDefinitionKey());
+        Map<String, Object> moAuditTaskVariables = new HashMap<>();
+        moAuditTaskVariables.put("moUserPass", true);
+        moAuditTaskVariables.put("moComments", "OK");
+        flowableService.completeTask(moAuditTask.getId(), moAuditTaskVariables);
+
+        // 获取后台清算任务
+        Task boClearTask = flowableService.findTasks(tq -> tq.taskCandidateGroup("boUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task boClearTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("boClear", boClearTask.getTaskDefinitionKey());
+        // 获取中台审批时设置的变量
+        assertEquals("OK", flowableService.findVariable(boClearTask.getId(), "moComments"));
+        Map<String, Object> boClearTaskVariables = new HashMap<>();
+        boClearTaskVariables.put("boUserPass", true);
+        flowableService.completeTask(boClearTask.getId(), boClearTaskVariables);
+
+        // 流程应已结束
+        assertTrue(flowableService.isProcessEnded(processInstance.getProcessInstanceId()));
+    }
+
+    @Test
+    public void testBondProcess_moNotPass_foNotReApply() {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("demo", "true");
+
+        final String initiator = "daniel.sun";
+
+        ProcessInstance processInstance =
+                flowableService.startProcessInstanceByKey(bondProcessDefinitionKey, variables, initiator);
+
+        // 获取中台审批任务
+        Task moAuditTask = flowableService.findTasks(tq -> tq.taskCandidateGroup("moUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task moAuditTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("moAudit", moAuditTask.getTaskDefinitionKey());
+        Map<String, Object> moAuditTaskVariables = new HashMap<>();
+        moAuditTaskVariables.put("moUserPass", false);
+        moAuditTaskVariables.put("moComments", "KO");
+        flowableService.completeTask(moAuditTask.getId(), moAuditTaskVariables);
+
+//        List<Task> currentTasks = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId());
+
+        // 获取前台修改任务
+        Task foModifyTask = flowableService.findTasks(tq -> tq.taskAssignee(initiator).processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task foModifyTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("foModify", foModifyTask.getTaskDefinitionKey());
+        // 获取中台审批时设置的变量
+        assertEquals("KO", flowableService.findVariable(foModifyTask.getId(), "moComments"));
+        Map<String, Object> foModifyTaskVariables = new HashMap<>();
+        foModifyTaskVariables.put("reApply", false);
+        flowableService.completeTask(foModifyTask.getId(), foModifyTaskVariables);
+
+        // 流程应已结束
+        assertTrue(flowableService.isProcessEnded(processInstance.getProcessInstanceId()));
+    }
+
+    @Test
+    public void testBondProcess_moNotPass_foReApply() {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("demo", "true");
+
+        final String initiator = "daniel.sun";
+
+        ProcessInstance processInstance =
+                flowableService.startProcessInstanceByKey(bondProcessDefinitionKey, variables, initiator);
+
+        // 获取中台审批任务
+        Task moAuditTask = flowableService.findTasks(tq -> tq.taskCandidateGroup("moUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task moAuditTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("moAudit", moAuditTask.getTaskDefinitionKey());
+        Map<String, Object> moAuditTaskVariables = new HashMap<>();
+        moAuditTaskVariables.put("moUserPass", false);
+        moAuditTaskVariables.put("moComments", "KO");
+        flowableService.completeTask(moAuditTask.getId(), moAuditTaskVariables);
+
+//        List<Task> currentTasks = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId());
+
+        // 获取前台修改任务
+        Task foModifyTask = flowableService.findTasks(tq -> tq.taskAssignee(initiator).processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task foModifyTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("foModify", foModifyTask.getTaskDefinitionKey());
+        // 获取中台审批时设置的变量
+        assertEquals("KO", flowableService.findVariable(foModifyTask.getId(), "moComments"));
+        Map<String, Object> foModifyTaskVariables = new HashMap<>();
+        foModifyTaskVariables.put("reApply", true);
+        foModifyTaskVariables.put("foComments", "DONE");
+        flowableService.completeTask(foModifyTask.getId(), foModifyTaskVariables);
+
+        // 再次获取中台审批任务
+        Task moAuditTask2 = flowableService.findTasks(tq -> tq.taskCandidateGroup("moUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task moAuditTask2 = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("moAudit", moAuditTask2.getTaskDefinitionKey());
+        assertEquals("DONE", flowableService.findVariable(moAuditTask2.getId(), "foComments"));
+    }
+
+    @Test
+    public void testBondProcess_moPass_boNotPass() {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("demo", "true");
+
+        final String initiator = "daniel.sun";
+
+        ProcessInstance processInstance =
+                flowableService.startProcessInstanceByKey(bondProcessDefinitionKey, variables, initiator);
+
+        // 获取中台审批任务
+        Task moAuditTask = flowableService.findTasks(tq -> tq.taskCandidateGroup("moUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task moAuditTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("moAudit", moAuditTask.getTaskDefinitionKey());
+        Map<String, Object> moAuditTaskVariables = new HashMap<>();
+        moAuditTaskVariables.put("moUserPass", true);
+        moAuditTaskVariables.put("moComments", "OK");
+        flowableService.completeTask(moAuditTask.getId(), moAuditTaskVariables);
+
+        // 获取后台清算任务
+        Task boClearTask = flowableService.findTasks(tq -> tq.taskCandidateGroup("boUser").processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task boClearTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("boClear", boClearTask.getTaskDefinitionKey());
+        // 获取中台审批时设置的变量
+        assertEquals("OK", flowableService.findVariable(boClearTask.getId(), "moComments"));
+        Map<String, Object> boClearTaskVariables = new HashMap<>();
+        boClearTaskVariables.put("boUserPass", false);
+        boClearTaskVariables.put("boComments", "KO");
+        flowableService.completeTask(boClearTask.getId(), boClearTaskVariables);
+
+        // 获取前台修改任务
+        Task foModifyTask = flowableService.findTasks(tq -> tq.taskAssignee(initiator).processInstanceId(processInstance.getProcessInstanceId())).get(0);
+//        Task foModifyTask = flowableService.findTasksByProcessInstanceId(processInstance.getProcessInstanceId()).get(0);
+        assertEquals("foModify", foModifyTask.getTaskDefinitionKey());
+        // 获取中台审批时设置的变量
+        assertEquals("OK", flowableService.findVariable(foModifyTask.getId(), "moComments"));
+        // 获取后台清算时设置的变量
+        assertEquals("KO", flowableService.findVariable(foModifyTask.getId(), "boComments"));
     }
 }

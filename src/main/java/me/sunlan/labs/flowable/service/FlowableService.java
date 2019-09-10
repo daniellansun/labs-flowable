@@ -5,6 +5,7 @@ import org.flowable.engine.*;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.TaskQuery;
 import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 @Service
 @Transactional
@@ -51,7 +53,7 @@ public class FlowableService {
     }
 
     public List<Task> findTasksByAssignee(String assignee) {
-        return taskService.createTaskQuery().taskCandidateUser(assignee).list();
+        return taskService.createTaskQuery().taskAssignee(assignee).list();
     }
 
     public List<Task> findTasksByAssigneeGroup(String assigneeGroup) {
@@ -62,6 +64,10 @@ public class FlowableService {
         return taskService.createTaskQuery().processInstanceId(processInstanceId).list();
     }
 
+    public List<Task> findTasks(Function<? super TaskQuery, ? extends TaskQuery> finder) {
+        return finder.apply(taskService.createTaskQuery()).list();
+    }
+
     public void completeTask(String taskId) {
         taskService.complete(taskId);
     }
@@ -70,12 +76,20 @@ public class FlowableService {
         taskService.complete(taskId, taskVariables);
     }
 
-    public Map<String, Object> findVariablesByTaskId(String taskId) {
+    public Map<String, Object> findVariables(String taskId) {
         return taskService.getVariables(taskId);
     }
 
     public Object findVariable(String taskId, String variableName) {
         return taskService.getVariable(taskId, variableName);
+    }
+
+    public void setVariables(String taskId, Map<String, ? extends Object> variables) {
+        taskService.setVariables(taskId, variables);
+    }
+
+    public void setVariable(String taskId, String variableName, Object value) {
+        taskService.setVariable(taskId, variableName, value);
     }
 
     public List<HistoricProcessInstance> findHistoricProcessInstancesByUserId(String userId) {
